@@ -287,7 +287,7 @@ handle = gethandle()
 while True:
     frame = render(frame)
     controlsResult = int(1/processControls())
-    displaystamina = list('Stamina: '+str(mainPlayer.stamina))
+    displaystamina = list('Stamina: '+str(round(mainPlayer.stamina, 3)))
     displayfps = list('FPS: '+str(controlsResult))
     frame[:len(displayfps)] = displayfps
     frame[width:width+len(displaystamina)] = displaystamina
