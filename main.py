@@ -1,25 +1,29 @@
+# REMEMBER - this code shouldnt be used as a tutorial
+# it is very buggy, has random solutions, and i wrote this with little to no experience in game developing
 import os
 import random
 import keyboard
 from enum import Enum
-#from math import sin, cos, tan, atan, asin, acos
-from fastmath import sin, cos
+from math import sin, cos
 from PIL import Image
-#from level import level
 from time import sleep
 from time import time
-import curses
+import ctypes
 os.system("@echo off")
 os.system("mode con cols=256 lines=66")
 os.system("title Backrooms")
-stdscr = curses.initscr()
-curses.noecho()
+
+lib = ctypes.CDLL("./libs/fastprint.dll")
+print_ = getattr(lib, "print")
+gethandle = getattr(lib, "createConsoleHandle")
+
+
 width = 256
 height = 66
 aspect = width/height
 pixelaspect = 11/24
 frame = list(' '*(width * height))
-#frame[width*height] = '\0'
+
 work = True
 t = 0 
 mapWidth = 101
@@ -75,7 +79,7 @@ class vec2:
 def getColor(x: int, gradientmode=None):
     if gradientmode is None: gradientmode = 0
     gradient = ' .:!/r(;14HZ9W8$@'
-    shortgradient = '~=x'
+    shortgradient = ' -~=x'
     if gradientmode == 0: return gradient[min(max(x, 0), len(gradient)-1)]
     if gradientmode == 1: return shortgradient[min(max(x, 0), len(shortgradient)-1)]
 def drawImage(img: Image):
@@ -88,7 +92,7 @@ def drawImage(img: Image):
             pixel = getColor(int(brightness))
             image[i+j*width] = pixel
     return image
-def LoadLevel(img: Image):
+def loadLevel(img: Image):
     global mapWidth
     global mapHeight
     image = list(' '*(mapWidth * mapHeight))
@@ -104,20 +108,18 @@ def LoadLevel(img: Image):
             else: pixel = '.'
             image[i+j*mapWidth] = pixel
     return image
-level = LoadLevel(Image.open('assets/maze.png'))
-def normalize(vec):
-    return vec/vec2(abs(vec),abs(vec))
-def dot(a: vec2, b: vec2):
-    return a.x * b.x + a.y * b.y
+level = loadLevel(Image.open('assets/maze.png'))
 
 class Player:
-    def __init__(self, pos: vec2, angle, fov, renderDistance):
+    def __init__(self, pos: vec2, angle, fov=3.1415926535897/3, renderDistance=16, size=0.1, speed=1, stamina=2):
         self.pos = pos
         self.fov = fov
         self.angle = angle
         self.renderDistance = renderDistance
-
-mainPlayer = Player(vec2(1.5,1.5), 0, 3.1415926 / 3, 16)
+        self.size = size
+        self.speed = speed
+        self.stamina = stamina
+mainPlayer = Player(vec2(1.5,1.5), 0, 3.1415926535897 / 3, 16)
 stamina = 1
 noiselevel = 0
 
@@ -127,26 +129,23 @@ walls = {
     '0' : "walls/finale.png"
     }
 def textureToList(img):
-    wallTexture = list(' '*32*32)
+    wallTexture = list(' '*1024)
     for i in range(32):
         for j in range(32):
-            wallTexture[j*32+i] = img.getpixel((i, j)) / 255
+            wallTexture[(j<<5)+i] = img.getpixel((i, j)) / 255
     return wallTexture
 wallTextures = {key:textureToList(Image.open('assets/' + value).convert('L')) for (key,value) in walls.items()}
-#wall = Image.open('assets/walls.png')
 
 
-def getTexture(pos: vec2, wallType):
+def getTexture(x, y, wallType):
     global wallTextures
     try: wallTextures[wallType]
     except KeyError: return 0
-    wallColor = wallTextures[wallType][int(pos.x*32)+(int((pos.y)*32))]
+    wallColor = wallTextures[wallType][int(x*32)+(int(y*32))]
     return wallColor
 class Raytype(Enum):
     RENDERLIGHT = 1
     PISTOL = 2 #unused
-
-
 class Ray:
     def __init__(self, startPos: vec2, rayAngle, maxDistance, type=Raytype.RENDERLIGHT):
         global level
@@ -163,90 +162,59 @@ class Ray:
             testY = int(startPos.y + eye.y*distanceToWall)
 
             if level[int(testY*mapWidth+testX)] in wallTextures or testX >= mapWidth or testY >= mapHeight or testX < 0  or testY < 0: 
-                distanceToWall-=0.04
+                distanceToWall-=0.049
                 while not hitWall:
-                    distanceToWall += 0.01
+                    distanceToWall += 0.001
                     testX = int(startPos.x + eye.x*distanceToWall)
                     testY = int(startPos.y + eye.y*distanceToWall)
                     if level[int(testY*mapWidth+testX)] in wallTextures or testX >= mapWidth or testY >= mapHeight or testX < 0  or testY < 0:
-                        distanceToWall-=0.009
+                        distanceToWall-=0.00009
                         while not hitWall:
-                            distanceToWall += 0.001
+                            distanceToWall += 0.00001
                             testX = int(startPos.x + eye.x*distanceToWall)
                             testY = int(startPos.y + eye.y*distanceToWall)
                             if level[int(testY*mapWidth+testX)] in wallTextures or testX >= mapWidth or testY >= mapHeight or testX < 0  or testY < 0: hitWall = True
-                # Block boundaries
-                # UPD: go fuck yourself, i'm not doing this 
-                # UPD 2: go fuck yourself, i did this
-                # UPD 3: why i even did this?
-                #p = []
-                #for tx in range(0,2):
-                #    for ty in range(0,2):
-                #        v = vec2(testX + tx - mainPlayer.pos.x, testY + ty - mainPlayer.pos.y)
-                #        d = abs(v)
-                #        v = normalize(v)
-                #        p.append([d,dot(eye, v)])
-                #p.sort(key=lambda l: l[0])
-                #bound = 0.01
-                #if acos(p[0][1]) < bound: boundary = True
-                #if acos(p[1][1]) < bound: boundary = True
             elif level[int(testY*mapWidth+testX)] == ',': 
                 hitWall = True
                 hitPortal = True
         self.lengh = distanceToWall
-        self.hitFlags =  hitPortal * 2 + hitWall
+        self.hitFlags =  (hitPortal<<1) + hitWall
         self.wallObject = level[int(testY*mapWidth+testX)]
         self.endPoint = vec2(startPos.x + eye.x*distanceToWall, startPos.y + eye.y*distanceToWall)
-def render():
+def render(frame):
     global width
     global height
     global mainPlayer
-    frame = list(' '*width*height)
     global mapWidth
     global mapHeight
     global noiselevel
+    halfScreenConst = height/2
+    widthFovConst = width / mainPlayer.fov
+    centerAngleConst = (mainPlayer.angle - mainPlayer.fov/2)
     for x in range(width):
-        rayAngle = (mainPlayer.angle - mainPlayer.fov/2) + x / width * mainPlayer.fov
+        rayAngle = centerAngleConst + x / widthFovConst
         ray = Ray(mainPlayer.pos, rayAngle, mainPlayer.renderDistance)
         ProjectionDistance = ray.lengh * cos(mainPlayer.angle - rayAngle)
-        ceiling = height/2-height/ProjectionDistance
+        ceiling = halfScreenConst-height/ProjectionDistance
         floor = height - ceiling
-        #pixel = ' '
-        Shade = max(min(1-ray.lengh/mainPlayer.renderDistance,1),0)
-        #pixel = getColor(int(Shade*17))
+        Shade = 1-max(min(ray.lengh/mainPlayer.renderDistance,1),0)
         if noiselevel: Shade+=noiselevel*random.random()
+        Shade *= 17
         if not ray.hitFlags & 0b1: Shade = 0
-        #if distanceToWall <= mainPlayer.renderDistance / 3: pixel = '@'
-        #elif distanceToWall < mainPlayer.renderDistance / 2: pixel = 'H'
-        #elif distanceToWall < mainPlayer.renderDistance / 1.5: pixel = 'Z'
-        #elif distanceToWall < mainPlayer.renderDistance: pixel = '1'
-        texturePos = (ray.endPoint.x+ray.endPoint.y)%1
-        mapConst = (height-2*ceiling)/32
+        textureX = (ray.endPoint.x+ray.endPoint.y)%1
+        mapConst = (height-ceiling*2)/32
         for y in range(height):
             if y <= ceiling:
-                b = (height / 2 - y) / (height / 2)
-                pixel = getColor(int(b*3), 1)
+                b = 1-y/halfScreenConst # (height/2-y) / (height/2) but optimised
+                pixel = getColor(int(b*5), 1)
                 frame[y*width + x] = pixel
             elif y > ceiling and y <= floor:
-                frame[y*width + x] = getColor(int(Shade*((getTexture(vec2(texturePos,int((y-ceiling)/mapConst)), ray.wallObject)))*17))
-                #frame[y*width + x] = pixel
-                #if ray.hitFlags & 0b10:
-                #    frame[y*width + x] = random.choice(["*", "0"])
-                #frame[y*width + x] = getColor(int(Shade*17))
+                frame[y*width + x] = getColor(int(Shade*((getTexture(textureX, int((y-ceiling)/mapConst), ray.wallObject)))))
             else:
-                b = (y - height / 2) / (height / 2)
-                pixel = getColor(int(b*3), 1)
+                b = y/halfScreenConst-1 # (y - height/2) / (height/2) but optimised
+                pixel = getColor(int(b*5), 1)
                 frame[y*width + x] = pixel
     return frame
-#if __name__ == '__main__':
-#    lock = Lock()
-#
-#    for num in range(1):
-#        Process(target=render, args=(lock, 0,width)).start()
-
-
-
-
 
 
 def processControls():
@@ -255,39 +223,45 @@ def processControls():
     global t1, t2
     global level
     global wallTextures
-    stamina = 1
+    movementKeys = {
+        'forward': keyboard.is_pressed('w'),
+        'backward': keyboard.is_pressed('s'),
+        'left': keyboard.is_pressed('a'),
+        'right': keyboard.is_pressed('d')
+    }
     t2 = time()
     elapsedTime = (t2 - t1)
-    #elapsedTime = 0.01
     t1 = t2
-    if keyboard.is_pressed('shift'):
-        runLevel = 1 + stamina
-        stamina -= 0.2 * elapsedTime
+    if any(movementKeys) and keyboard.is_pressed('shift'):
+        mainPlayer.speed = 1 + mainPlayer.stamina
+        mainPlayer.stamina -= 0.2 * elapsedTime
     else: 
-        stamina += 0.15 * elapsedTime
-        runLevel = 1
-    stamina = min(max(stamina, 0), 1)
+        mainPlayer.stamina += 0.15 * elapsedTime
+        mainPlayer.speed = 1
+    mainPlayer.stamina = min(max(mainPlayer.stamina, 0), 2)
     def inWallCheck(pos): return level[int(pos.y)*mapWidth + int(pos.x)] in wallTextures
     def inPortalCheck(pos): return level[int(pos.y)*mapWidth + int(pos.x)] == ','
-    playerHitbox = [mainPlayer.pos+vec2(0.1, 0.1), mainPlayer.pos+vec2(-0.1, 0.1), mainPlayer.pos-vec2(-0.1, 0.1), mainPlayer.pos-vec2(0.1, 0.1)]
-    if keyboard.is_pressed('w'):
-        shift = vec2(sin(mainPlayer.angle) * elapsedTime * runLevel, cos(mainPlayer.angle) * elapsedTime * runLevel)
+    def getHitbox():
+        return [mainPlayer.pos+vec2(mainPlayer.size, mainPlayer.size), mainPlayer.pos+vec2(-mainPlayer.size, mainPlayer.size), mainPlayer.pos-vec2(-mainPlayer.size, mainPlayer.size), mainPlayer.pos-vec2(mainPlayer.size, mainPlayer.size)]
+    playerHitbox = getHitbox()
+    if movementKeys['forward']:
+        shift = vec2(sin(mainPlayer.angle) * elapsedTime * mainPlayer.speed, cos(mainPlayer.angle) * elapsedTime * mainPlayer.speed)
         mainPlayer.pos.x += shift.x
-        playerHitbox = [mainPlayer.pos+vec2(0.1, 0.1), mainPlayer.pos+vec2(-0.1, 0.1), mainPlayer.pos-vec2(-0.1, 0.1), mainPlayer.pos-vec2(0.1, 0.1)]
+        playerHitbox = getHitbox()
         if any(map(inWallCheck, playerHitbox)):
             mainPlayer.pos.x -= shift.x
         mainPlayer.pos.y += shift.y
-        playerHitbox = [mainPlayer.pos+vec2(0.1, 0.1), mainPlayer.pos+vec2(-0.1, 0.1), mainPlayer.pos-vec2(-0.1, 0.1), mainPlayer.pos-vec2(0.1, 0.1)]
+        playerHitbox = getHitbox()
         if any(map(inWallCheck, playerHitbox)):
             mainPlayer.pos.y -= shift.y
-    if keyboard.is_pressed('s'): 
-        shift = vec2(sin(mainPlayer.angle) * elapsedTime * runLevel, cos(mainPlayer.angle) * elapsedTime * runLevel)
+    if movementKeys['backward']: 
+        shift = vec2(sin(mainPlayer.angle) * elapsedTime * mainPlayer.speed, cos(mainPlayer.angle) * elapsedTime * mainPlayer.speed)
         mainPlayer.pos.x -= shift.x
-        playerHitbox = [mainPlayer.pos+vec2(0.1, 0.1), mainPlayer.pos+vec2(-0.1, 0.1), mainPlayer.pos-vec2(-0.1, 0.1), mainPlayer.pos-vec2(0.1, 0.1)]
+        playerHitbox = getHitbox()
         if any(map(inWallCheck, playerHitbox)):
             mainPlayer.pos.x += shift.x
         mainPlayer.pos.y -= shift.y
-        playerHitbox = [mainPlayer.pos+vec2(0.1, 0.1), mainPlayer.pos+vec2(-0.1, 0.1), mainPlayer.pos-vec2(-0.1, 0.1), mainPlayer.pos-vec2(0.1, 0.1)]
+        playerHitbox = getHitbox()
         if any(map(inWallCheck, playerHitbox)):
             mainPlayer.pos.y += shift.y
     if any(map(inPortalCheck, playerHitbox)):
@@ -304,50 +278,17 @@ def processControls():
         noiselevel += 0.01 * elapsedTime
     else:
         noiselevel = 0
-    if keyboard.is_pressed('a'): mainPlayer.angle -= 1.5 * elapsedTime
-    if keyboard.is_pressed('d'): mainPlayer.angle += 1.5 * elapsedTime
+    if movementKeys['left']: mainPlayer.angle -= 1.5 * elapsedTime
+    if movementKeys['right']: mainPlayer.angle += 1.5 * elapsedTime
     return elapsedTime
-width = 128
-height = 33
-resmodifier = 2
-while True:
-    introMessage = f'Set resolution: {width*resmodifier}/{height*resmodifier}'
-    stdscr.addstr(int(height*resmodifier/2), int((width*resmodifier-len(introMessage))/2), introMessage)
-    if resmodifier==3: stdscr.addstr(int(height*resmodifier/2), int((width*resmodifier-len('Warning! max resolution is very unstable for some reason (probably skill issue)'))/2), 'Warning! max resolution is very unstable for some reason (probably skill issue)')
-    stdscr.refresh()
-    if (keyboard.is_pressed('Right') or keyboard.is_pressed('d')) and resmodifier<3: 
-        resmodifier +=1
-        os.system(f"mode con cols={width*resmodifier} lines={height*resmodifier}")
-        sleep(0.5)
-    if (keyboard.is_pressed('Left') or keyboard.is_pressed('a')) and resmodifier>0: 
-        resmodifier -=1
-        os.system(f"mode con cols={width*resmodifier} lines={height*resmodifier}")
-        sleep(0.5)
-    if keyboard.is_pressed('Enter'): break
-width *= resmodifier
-height *= resmodifier
 
-#del stdscr
-#curses.endwin()
-os.system(f"mode con cols={width} lines={height}")
-if height == 33: height*=2
 sleep(1)
-stdscr = curses.initscr()
-curses.noecho()
-#os.system("mode con cols=256 lines=66")
+handle = gethandle()
 while True:
-    #sleep(0.1)p
-    #render(0, width)
-    #for ny in range(mapHeight):
-    #    for nx in range(mapWidth):
-    #        frame[(ny+2)*width + nx] = level[ny * mapWidth + nx]
-    #frame[(int(mainPlayer.pos.y+2)) * width + int(mainPlayer.pos.x)] = 'P'
-    #frame = render(0, width)
-    controlsResult = processControls()
-    frame = render()
-    stdscr.addstr(0, 0, ''.join(frame[:-1]))
-    stdscr.addstr(0, 0, str(1/controlsResult))
-    stdscr.refresh()
-    #stdscr.addstr(0, 0, ''.join(frame[:-2]))
-    #stdscr.addch(frame[-1])
-    #stdscr.refresh()
+    frame = render(frame)
+    controlsResult = int(1/processControls())
+    displaystamina = list('Stamina: '+str(mainPlayer.stamina))
+    displayfps = list('FPS: '+str(controlsResult))
+    frame[:len(displayfps)] = displayfps
+    frame[width:width+len(displaystamina)] = displaystamina
+    print_(''.join(frame), width, height, handle)
