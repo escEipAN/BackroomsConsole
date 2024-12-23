@@ -9,90 +9,120 @@ from PIL import Image
 from time import sleep
 from time import time
 import ctypes
+
+#frame settings, not recommended to change
+width = 256
+height = 66
+aspect = width/height
+#symbols are not entirely square, so i calculated that they are 11x24 pixels in size
+pixelaspect = 11/24
+#creating the frame buffer
+frame = list(' '*(width * height))
+
+#setting the console
 os.system("@echo off")
-os.system("mode con cols=256 lines=66")
+os.system("mode con cols={width} lines={height}")
 os.system("title Backrooms")
 
+
+# using fast print library that my friend has made for me (because curses sucks)
 lib = ctypes.CDLL("./libs/fastprint.dll")
 print_ = getattr(lib, "print")
 gethandle = getattr(lib, "createConsoleHandle")
 
 
-width = 256
-height = 66
-aspect = width/height
-pixelaspect = 11/24
-frame = list(' '*(width * height))
+# initial variables
+work = True # set loop to active, when it becomes false - the program stops
+t = 0 # timer variable
 
-work = True
-t = 0 
-mapWidth = 101
+#width and height of the map, i was too lazy to get it from image
+mapWidth = 101 
 mapHeight = 101
+
+#get time to make movement speed independent from the framerate
 t1 = time()
 t2 = time()
+
+
+
 #definitely did not stole vec2 from stackoverflow
 # UPDATE: i stole only 50% of it
+# UPDATE 2: ok, i'll try to explain what it does
 
 class vec2:
-
+    # mainly operator overload
+    # init class
     def __init__(self, x, y):
         self.x = x
         self.y = y
-    
+    # not an actual vector division (it does not exist), but convenient for usage
     def __truediv__(self, other):
         return vec2(self.x/other.x, self.y/other.y)
 
+    # not an actual vector multiplication, but convenient for usage
     def __mul__(self, other):
         return vec2(self.x*other.x, self.y*other.y)
 
+    # why not, __repr__ and __str__ for debug
     def __repr__(self):
         return 'vec2({}, {})'.format(self.x, self.y)
 
     def __str__(self):
         return '({}, {})'.format(self.x, self.y)
 
+    # in vector math, a(ax, ay) + b(bx, by) = c(ax+bx, ay+by)
     def __add__(self, other):
         return vec2(self.x + other.x, self.y + other.y)
 
+    # same, but for a(ax,ay)+= b(bx,by)
     def __iadd__(self, other):
         self.x += other.x
         self.y += other.y
         return self
 
+    # kinda obvious, but in vector math, a(ax, ay) - b(bx, by) = c(ax-bx, ay-by)
     def __sub__(self, other):
         return vec2(self.x - other.x, self.y - other.y)
-
+    # same, but for a(ax,ay)+= b(bx,by)
     def __isub__(self, other):
         self.x -= other.x
         self.y -= other.y
         return self
 
+    # |a| = sqrt(ax**2 + ay**2)
     def __abs__(self):
         return (self.x**2+self.y**2)**0.5
 
+    #absolutely not needed, but why not
     def __bool__(self):
         return self.x != 0 or self.y != 0
 
+    # -a(ax, ay) = a(-ax, -ay)
     def __neg__(self):
         return vec2(-self.x, -self.y)
 
-def getColor(x: int, gradientmode=None):
+# get gradient from brightness
+def getColor(x: int, gradientmode=None) -> str:
     if gradientmode is None: gradientmode = 0
+    # 2 types of gradient, one for walls and one for floor
     gradient = ' .:!/r(;14HZ9W8$@'
     shortgradient = ' -~=x'
+    # min(max(x, a),b) clamps x between a and b (if x<a returns a, if x>b returns b, else returns x)
     if gradientmode == 0: return gradient[min(max(x, 0), len(gradient)-1)]
     if gradientmode == 1: return shortgradient[min(max(x, 0), len(shortgradient)-1)]
 def drawImage(img: Image):
+    #set frame from external png
     img = img.convert('L')
     image = list(' '*(width * height))
     if not img.size == (width, height): img = img.resize((width, height))
     for i in range(width):
         for j in range(height):
-            brightness = img.getpixel((i, j)) / 255 * 17
+            brightness = img.getpixel((i, j)) / 255 * 17 #17 because of gradient lengh
             pixel = getColor(int(brightness))
             image[i+j*width] = pixel
     return image
 def loadLevel(img: Image):
+    #load level from image
     global mapWidth
     global mapHeight
     image = list(' '*(mapWidth * mapHeight))
